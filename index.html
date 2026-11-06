@@ -12,6 +12,10 @@ a{color:var(--teal);text-decoration:none}a:hover{text-decoration:underline}butto
 @media(max-width:800px){.summary-grid{grid-template-columns:repeat(2,1fr)}.budgetbox,.info-grid{grid-template-columns:1fr}.hero-art{opacity:.14;width:67%}}@media(max-width:550px){.wrap{padding:0 17px}.main{padding:24px 14px 40px}.hero{padding:44px 17px 55px;min-height:360px}.summary-grid{gap:8px}.stat{padding:15px}.stat strong{font-size:17px}.panel{padding:17px}.day-head{padding:19px 18px}.day-head h3{font-size:20px}.day-tag{display:none}.day-body{padding:15px 17px}.event{grid-template-columns:90px minmax(0,1fr);gap:9px}.time{font-size:12px}.event strong{font-size:14px}.event p{font-size:12.5px}.day-foot,.checklist{grid-template-columns:1fr}.budgetitem input{width:95px}.section-title{font-size:23px}}
 @media print{.topnav,.screen-only,.map-buttons{display:none!important}.header{print-color-adjust:exact;-webkit-print-color-adjust:exact}.hero{min-height:265px;padding:30px 0}.header:after,.hero-art{display:none}.main{padding-top:15px}.day{break-inside:avoid;box-shadow:none;margin:15px 0}.panel{box-shadow:none}.day-head{print-color-adjust:exact;-webkit-print-color-adjust:exact}.section{break-before:page;margin-top:15px}.budgetitem input{border:0}.footer{padding-bottom:5px}body{background:white}}
 
+/* Numbered location markers (no misleading straight-line driving routes) */
+.jeju-number-marker{background:transparent;border:0;}
+.jeju-number-marker span{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:2px solid white;border-radius:50%;box-shadow:0 2px 8px #102d3666;color:white;font-weight:850;font-size:14px;}
+
 /* Leaflet containment fallback: prevents map tiles from escaping if CDN CSS loads late */
 #jeju-map{position:relative;overflow:hidden;isolation:isolate;contain:layout paint;}
 #jeju-map .leaflet-pane,#jeju-map .leaflet-map-pane,#jeju-map .leaflet-tile-pane,#jeju-map .leaflet-overlay-pane,#jeju-map .leaflet-shadow-pane,#jeju-map .leaflet-marker-pane,#jeju-map .leaflet-tooltip-pane,#jeju-map .leaflet-popup-pane{position:absolute;left:0;top:0;}
@@ -55,12 +59,28 @@ const store=()=>{try{localStorage.setItem('jeju-swaps-v1',JSON.stringify(saved))
 let current=0,mode='day';
 function nav(q){return 'https://map.naver.com/p/search/'+encodeURIComponent(q)}
 function activePoints(day){return days[day].points.map((p,i)=>{const a=saved[day+'-'+i];return a?[a.name,a.kr,a.lat,a.lng]:p})}
-function marker(p,idx,color,kind){const ll=[p[2],p[3]];const m=L.circleMarker(ll,{radius:kind==='candidate'?7:9,color:color,weight:2,fillColor:kind==='candidate'?'#fff':color,fillOpacity:kind==='candidate'?.9:.85}).addTo(layer);m.bindPopup('<b>'+p[0]+'</b><br><a target="_blank" rel="noopener" href="'+nav(p[1])+'">NAVER Map 搜尋 ↗</a>');return ll}
+function marker(p,idx,color,kind){
+ const ll=[p[2],p[3]];
+ let m;
+ if(kind==='candidate'){
+   m=L.circleMarker(ll,{radius:7,color:color,weight:2,fillColor:'#fff',fillOpacity:.95}).addTo(layer);
+ }else{
+   const n=idx+1;
+   const safeColor=/^#[0-9a-fA-F]{6}$/.test(color)?color:'#153847';
+   const icon=L.divIcon({className:'jeju-number-marker',html:'<span style="background:'+safeColor+'">'+n+'</span>',iconSize:[30,34],iconAnchor:[15,32]});
+   m=L.marker(ll,{icon}).addTo(layer);
+ }
+ const label=document.createElement('div');
+ const strong=document.createElement('strong');strong.textContent=p[0];label.appendChild(strong);
+ const link=document.createElement('a');link.href=nav(p[1]);link.target='_blank';link.rel='noopener noreferrer';link.textContent='NAVER Map 搜尋 ↗';
+ label.appendChild(document.createElement('br'));label.appendChild(link);
+ m.bindPopup(label);return ll;
+}
 function show(day){current=day;mode='day';render()}
 function render(){layer.clearLayers();b.querySelectorAll('button').forEach((x,i)=>{const on=mode==='all'?i===5:i===current;x.style.background=on?'#153847':'#eaf1f2';x.style.color=on?'white':'#153847'});cards.innerHTML='';host.innerHTML='';let bounds=[];
- if(mode==='all'){days.forEach((d,j)=>activePoints(j).forEach((p,i)=>bounds.push(marker(p,i,d.color,'main'))));host.textContent='目前顯示五天已排定的景點；請點選 D1～D5 查看候選與雨天備案。'}
+ if(mode==='all'){days.forEach((d,j)=>activePoints(j).forEach((p,i)=>bounds.push(marker(p,i,d.color,'main'))));host.textContent='目前顯示五天景點位置（各天編號重新從1開始）；請點選 D1～D5 查看當天順序、候選與雨天備案。地圖不顯示駕車道路。'}
  else {const d=days[current],pts=activePoints(current);pts.forEach((p,i)=>{bounds.push(marker(p,i,d.color,'main'));const row=document.createElement('div');row.style='padding:10px 12px;background:#f1f6f6;border-radius:10px;margin-bottom:7px;font-size:14px';const label=document.createElement('span');label.textContent=(i+1)+'. '+p[0]+(saved[current+'-'+i]?'（已替換）':'');row.appendChild(label);const a=document.createElement('a');a.href=nav(p[1]);a.target='_blank';a.rel='noopener';a.textContent=' NAVER ↗';a.style='margin-left:8px;color:#176c72';row.appendChild(a);if(saved[current+'-'+i]){const reset=document.createElement('button');reset.textContent='還原';reset.style='margin-left:8px;padding:4px 8px;border:1px solid #abc;border-radius:8px;cursor:pointer';reset.onclick=()=>{delete saved[current+'-'+i];store();render()};row.appendChild(reset)}cards.appendChild(row)});
- L.polyline(pts.map(p=>[p[2],p[3]]),{color:d.color,weight:3,dashArray:'7 8',opacity:.8}).addTo(layer);
+ // No straight-line connections: this map shows POI positions only. Road navigation is handled by NAVER Map.
  const heading=document.createElement('h3');heading.textContent='周邊候選景點／雨天備案';heading.style='margin:0 0 8px;color:#153847';host.appendChild(heading);
  const filter=document.createElement('div');filter.style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px';host.appendChild(filter);
  const list=document.createElement('div');host.appendChild(list);
